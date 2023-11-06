@@ -1,1 +1,3 @@
-# UNdatathon2023
+# UN datathon 2023
+
+The team "PowerThruData" consist of Chloe Turcan, Kaede Hasegawa, Brook Lord and Angel Pooler. We tackled key transition "Jobs and Social Protection" although it can be related to other transitions (e.g., Digital Connectivity, Education, Energy Affordability, Pollution). We focused on specific regions known as "Marginal Villages" in Japan which are having difficulty to sustain their basic life needs (due to lack of land management, leading to negative impacts on environment) and tried to produce novel data solution using PowerBI visualisation and linear regression model on Python. 
