@@ -1,0 +1,178 @@
+---
+title: "data2019"
+output: html_document
+date: "2023-11-05"
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+```{r}
+library(kableExtra)
+library(lme4)
+library(lmerTest)
+library(mice)
+library(tidyverse)
+```
+
+#Data Wrangling
+```{r}
+#read in raw data
+data1 <- read.csv("data1.csv")
+data2 <- read.csv("data2.csv")
+data3 <- read.csv("data3.csv")
+data4 <- read.csv("data4.csv")
+data5 <- read.csv("data5.csv")
+
+#combined raw data
+data <- rbind(data1, data2)
+data <- rbind(data, data3)
+data <- rbind(data, data4)
+data <- rbind(data, data5)
+
+rm(data1, data2, data3, data4, data5)
+```
+
+```{r}
+#removed extra columns
+data <- data %>% select(-YEAR.Code, -X.ITEMS, -Annotation, -Annotation.1, -Annotation.2, -Annotation.3, -Annotation.4, -Annotation.5, -Annotation.6, -Annotation.7, -Annotation.8, -Annotation.9, -Annotation.10, -Annotation.11, -Annotation.12, -Annotation.13, -Annotation.14, -Annotation.15, -Annotation.16, -Annotation.17, -Annotation.18, -Annotation.19, -Annotation.20, -Annotation.21, -Annotation.22, -Annotation.23, -Annotation.24)
+
+#removed extra variables
+data <- data %>% select(-"A5103_Number.of.in.migrants.from.other.municipalities.person.",
+                        -"A5104_Number.of.out.migrants.to.other.municipalities.person.",
+                        -"C210710_Number.of.establishments..Electricity..gas..heat.supply.and.water..number.of.establishments.",
+                        -"C210712_Number.of.establishments..Transport.and.postal.activities..number.of.establishments.",
+                        -"C210713_Number.of.establishments..Wholesale.and.retail.trade..number.of.establishments.", -"C3109_Area.of.abandoned.cropland.ha.",
+                        -"D320303_Total.welfare.expenditure..Municipality..thousand.yen.", -"K4201_Number.of.recognitions.of.criminal.offenses.number.of.cases.",
+                        -"I1101_Life.expectancy..0.years.old..Male..years.", -"I1102_Life.expectancy..0.years.old..Female..years.",
+                        -"J2301_Number.of.welfare.institutions.for.the.aged..Questionnaire.about.details..number.of.establishments.",
+                        -"I5101_Number.of.hospitals.number.of.hospitals.",
+                        -"I5102_Number.of.general.clinics.number.of.clinics.",
+                        -"I5103_Number.of.dental.clinics.number.of.clinics.")
+```
+
+```{r}
+#filtered out years < 2000
+data <- data %>%
+  filter(YEAR != 1980 & YEAR != 1985 & YEAR != 1990 & YEAR != 1995)
+
+#recoded missing data
+data[data == "***"] <- NA
+data[data == "-"] <- NA
+```
+
+```{r}
+#renamed variables
+data <- data %>% rename("year" = "YEAR",
+                        "munCode" = "AREA.Code",
+                        "mun" = "AREA",
+                        "totalPop" = "A1101_Total.population..Both.sexes..person.",
+                        "totalOldPop" = "A1303_Total.population..65.and.over..person.",
+                        "births" = "A4101_Number.of.live.births.person.",
+                        "deaths" = "A4200_Number.of.deaths.person.",
+                        "totArea" = "B1102_Total.land.area..Incl..the.northern.territories.and.Takeshima..ha.",
+                        "inhabitable" = "B1103_Inhabitable.area.ha.",
+                        "kindergarten" = "E1101_Number.of.kindergartens.number.of.kindergartens.",
+                        "elementary" = "E2101_Number.of.elementary.schools.number.of.schools.",
+                        "lowerSecond" = "E3101_Number.of.lower.secondary.schools.number.of.schools.",
+                        "upperSecond" = "E4101_Number.of.upper.secondary.schools.number.of.schools.",
+                        "employed" = "F1102_.Population.census..Number.of.employed.persons.person.")
+```
+
+```{r}
+#removed commas from numeric variables
+data$totalPop <- gsub(",", "", data$totalPop)
+data$totalOldPop <- gsub(",", "", data$totalOldPop)
+data$births <- gsub(",", "", data$births)
+data$deaths <- gsub(",", "", data$deaths)
+data$totArea <- gsub(",", "", data$totArea)
+data$inhabitable <- gsub(",", "", data$inhabitable)
+data$kindergarten <- gsub(",", "", data$kindergarten)
+data$elementary <- gsub(",", "", data$elementary)
+data$lowerSecond <- gsub(",", "", data$lowerSecond)
+data$upperSecond <- gsub(",", "", data$upperSecond)
+data$employed <- gsub(",", "", data$employed)
+
+#recoded data types
+data <- data %>% mutate(munCode = as.character(munCode))
+data <- data %>% mutate(across(c(totalPop:employed), as.numeric))
+```
+
+```{r}
+#removed missing data
+data <- data %>% drop_na()
+
+#removed municipalities with missing data across any year
+data <- data %>% group_by(munCode) %>%
+  mutate(missing = n()) %>%
+  filter(missing > 4) %>%
+  select(-missing)
+
+data %>% group_by(year) %>% count()
+```
+
+```{r}
+#derived outcome and predictor variables
+data <- data %>% mutate(percOldPop = (totalOldPop/totalPop)*100,
+                        birthrate = (births/totalPop)*1000,
+                        deathrate = (deaths/totalPop)*1000,
+                        percInhab = (inhabitable/totArea)*100,
+                        percEmpl = (employed/totalPop)*100,
+                        education = (kindergarten+elementary+lowerSecond+upperSecond))
+
+#removed miscoded observations
+data <- data %>% filter(totalPop != 0)
+data <- data %>% filter(percOldPop != 100)
+data <- data %>% filter(birthrate < 100)
+
+#removed municipalities with miscoded data across any year
+data <- data %>% group_by(munCode) %>%
+  mutate(missing = n()) %>%
+  filter(missing > 4) %>%
+  select(-missing)
+
+data %>% group_by(year) %>% count()
+```
+
+```{r}
+#exported data
+write.csv(data, "data.csv")
+```
+
+#Descriptive Statistics
+```{r}
+#created summary table
+summary <- data %>% group_by(year) %>%
+  summarise(Municipalities = n(),
+            totalPop = round(mean(totalPop), 2),
+            percOldPop = round(mean(percOldPop), 2),
+            percEmpl = round(mean(percEmpl), 2),
+            birthrate = round(mean(birthrate), 2),
+            deathrate = round(mean(deathrate), 2),
+            percInhab = round(mean(percInhab), 2),
+            education = round(mean(education), 2))
+
+summary <- summary %>% rename("M Total Population" = "totalPop",
+                              "M % of Population > 65" = "percOldPop",
+                              "M Birth Rate" = "birthrate",
+                              "M Mortality Rate" = "deathrate",
+                              "M % of Employed Persons" = "percEmpl",
+                              "M % of Inhabitable Land" = "percInhab",
+                              "No of Educational Infrastructure" = "education")
+
+#changed summary formatting
+summary = as.data.frame(t(summary))
+
+#renamed header
+summary <- summary[-1,]
+summary <- summary %>%
+  rename("2000"="V1", "2005"="V2", "2010"="V3", "2015"="V4", "2020"="V5")
+
+kbl(summary, caption = "Descriptive Statistics") %>%
+  kable_classic(full_width=F)
+```
+
+```{r}
+write.csv(data, "data.csv")
+```
